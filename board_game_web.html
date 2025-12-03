@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通用棋类对战平台 (Web版)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button.secondary {
+            background-color: #2196F3;
+        }
+
+        button.secondary:hover {
+            background-color: #0b7dda;
+        }
+
+        button.danger {
+            background-color: #f44336;
+        }
+
+        button.danger:hover {
+            background-color: #d32f2f;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        canvas {
+            background-color: #E3CF57;
+            cursor: crosshair;
+            display: block;
+        }
+
+        #status-bar {
+            margin-top: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            height: 30px;
+        }
+
+        #message-area {
+            color: #d32f2f;
+            font-weight: bold;
+            margin-top: 5px;
+            height: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>通用棋类对战平台</h1>
+
+    <div class="controls">
+        <button onclick="startGame(1, 15)">开始五子棋 (15路)</button>
+        <button onclick="startGame(2, 19)">开始围棋 (19路)</button>
+        <button class="secondary" onclick="undo()">悔棋</button>
+        <button class="secondary" onclick="passTurn()">虚着 (仅围棋)</button>
+        <button class="danger" onclick="resetGame()">重置/结束</button>
+    </div>
+
+    <div id="status-bar">请选择游戏模式开始</div>
+    <div id="message-area"></div>
+
+    <div id="game-container">
+        <canvas id="boardCanvas" width="600" height="600"></canvas>
+    </div>
+
+    <script>
+        // ================= 常量定义 =================
+        const PieceType = { EMPTY: 0, BLACK: 1, WHITE: 2 };
+        const GameType = { GOMOKU: 1, GO: 2 };
+        const CELL_SIZE = 30;
+        const MARGIN = 30;
+
+        // ================= 游戏状态 =================
+        let gameState = {
+            board: [],
+            size: 15,
+            currentPlayer: PieceType.BLACK,
+            gameType: null,
+            isGameOver: true,
+            history: [],
+            passCount: 0
+        };
+
+        const canvas = document.getElementById('boardCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // ================= 核心逻辑 =================
+
+        function initBoard(size) {
+            let grid = [];
+            for (let r = 0; r < size; r++) {
+                let row = [];
+                for (let c = 0; c < size; c++) row.push(PieceType.EMPTY);
+                grid.push(row);
+            }
+            return grid;
+        }
+
+        function startGame(type, size) {
+            gameState.gameType = type;
+            gameState.size = size;
+            gameState.board = initBoard(size);
+            gameState.currentPlayer = PieceType.BLACK;
+            gameState.isGameOver = false;
+            gameState.history = [];
+            gameState.passCount = 0;
+
+            // 调整画布大小
+            const dim = size * CELL_SIZE + MARGIN * 2;
+            canvas.width = dim;
+            canvas.height = dim;
+
+            saveState();
+            updateUI("游戏开始：黑方执黑先行");
+            drawBoard();
+        }
+
+        function saveState() {
+            // 深拷贝当前状态存入历史
+            const snapshot = {
+                board: JSON.parse(JSON.stringify(gameState.board)),
+                currentPlayer: gameState.currentPlayer,
+                passCount: gameState.passCount,
+                isGameOver: gameState.isGameOver
+            };
+            gameState.history.push(snapshot);
+        }
+
+        function undo() {
+            if (gameState.history.length < 2) {
+                showMessage("无法悔棋：已是初始状态");
+                return;
+            }
+            gameState.history.pop(); // 移除当前
+            const lastState = gameState.history[gameState.history.length - 1];
+
+            gameState.board = JSON.parse(JSON.stringify(lastState.board));
+            gameState.currentPlayer = lastState.currentPlayer;
+            gameState.passCount = lastState.passCount;
+            gameState.isGameOver = lastState.isGameOver;
+
+            updateUI("已悔棋");
+            drawBoard();
+        }
+
+        function passTurn() {
+            if (gameState.isGameOver) return;
+            if (gameState.gameType !== GameType.GO) {
+                showMessage("五子棋不能虚着");
+                return;
+            }
+
+            gameState.passCount++;
+            switchPlayer();
+
+            if (gameState.passCount >= 2) {
+                endGame("双方虚着，游戏结束");
+            } else {
+                saveState();
+                updateUI("玩家虚着，换手");
+                drawBoard();
+            }
+        }
+
+        function resetGame() {
+            gameState.isGameOver = true;
+            gameState.board = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateUI("游戏已重置");
+        }
+
+        function switchPlayer() {
+            gameState.currentPlayer = gameState.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
+        }
+
+        function showMessage(msg) {
+            const el = document.getElementById('message-area');
+            el.innerText = msg;
+            setTimeout(() => el.innerText = "", 3000);
+        }
+
+        function updateUI(status) {
+            const el = document.getElementById('status-bar');
+            const pName = gameState.currentPlayer === PieceType.BLACK ? "黑方" : "白方";
+            if (gameState.isGameOver) {
+                el.innerText = status;
+            } else {
+                el.innerText = `当前执子: ${pName} | ${status || "进行中"}`;
+            }
+        }
+
+        function endGame(reason) {
+            gameState.isGameOver = true;
+            saveState();
+            updateUI(`🏆 ${reason}`);
+            alert(reason);
+        }
+
+        // ================= 交互与绘图 =================
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameState.isGameOver || !gameState.board.length) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const c = Math.round((x - MARGIN) / CELL_SIZE);
+            const r = Math.round((y - MARGIN) / CELL_SIZE);
+
+            if (r >= 0 && r < gameState.size && c >= 0 && c < gameState.size) {
+                makeMove(r, c);
+            }
+        });
+
+        function makeMove(r, c) {
+            if (gameState.board[r][c] !== PieceType.EMPTY) {
+                showMessage("此处已有棋子");
+                return;
+            }
+
+            // 1. 尝试落子
+            const originalBoard = JSON.parse(JSON.stringify(gameState.board));
+            gameState.board[r][c] = gameState.currentPlayer;
+
+            try {
+                // 2. 规则检查
+                if (gameState.gameType === GameType.GO) {
+                    processGoLogic(r, c);
+                } else {
+                    // 五子棋只需检查是否空（已做）
+                }
+            } catch (err) {
+                gameState.board = originalBoard; // 回滚
+                showMessage(err);
+                return;
+            }
+
+            // 3. 胜负判定
+            gameState.passCount = 0;
+            let win = false;
+            if (gameState.gameType === GameType.GOMOKU) {
+                win = checkGomokuWin(r, c, gameState.currentPlayer);
+            }
+
+            if (win) {
+                const winner = gameState.currentPlayer === PieceType.BLACK ? "黑方获胜" : "白方获胜";
+                drawBoard();
+                endGame(winner);
+            } else {
+                switchPlayer();
+                saveState();
+                updateUI();
+                drawBoard();
+            }
+        }
+
+        // --- 五子棋逻辑 ---
+        function checkGomokuWin(r, c, color) {
+            const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+            for (let [dr, dc] of directions) {
+                let count = 1;
+                for (let i = 1; i < 5; i++) {
+                    if (getPiece(r + dr * i, c + dc * i) === color) count++; else break;
+                }
+                for (let i = 1; i < 5; i++) {
+                    if (getPiece(r - dr * i, c - dc * i) === color) count++; else break;
+                }
+                if (count >= 5) return true;
+            }
+            return false;
+        }
+
+        // --- 围棋逻辑 (简化版：提子与自杀检测) ---
+        function processGoLogic(r, c) {
+            const opponent = gameState.currentPlayer === PieceType.BLACK ? PieceType.WHITE : PieceType.BLACK;
+            let captured = false;
+
+            // 检查四周对手气
+            const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+            dirs.forEach(([dr, dc]) => {
+                const nr = r + dr, nc = c + dc;
+                if (getPiece(nr, nc) === opponent) {
+                    if (getLiberties(nr, nc) === 0) {
+                        removeGroup(nr, nc, opponent);
+                        captured = true;
+                    }
+                }
+            });
+
+            // 自杀检测
+            if (!captured && getLiberties(r, c) === 0) {
+                throw "禁着点：自杀";
+            }
+        }
+
+        function getPiece(r, c) {
+            if (r < 0 || r >= gameState.size || c < 0 || c >= gameState.size) return -1;
+            return gameState.board[r][c];
+        }
+
+        function getLiberties(r, c) {
+            let color = gameState.board[r][c];
+            let stack = [[r, c]];
+            let visited = new Set([`${r},${c}`]);
+            let liberties = 0;
+
+            while (stack.length) {
+                let [cr, cc] = stack.pop();
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    let nr = cr + dr, nc = cc + dc;
+                    if (nr >= 0 && nr < gameState.size && nc >= 0 && nc < gameState.size) {
+                        let p = gameState.board[nr][nc];
+                        if (p === PieceType.EMPTY) {
+                            if (!visited.has(`${nr},${nc}E`)) { // 粗略去重气
+                                liberties++;
+                                visited.add(`${nr},${nc}E`);
+                            }
+                        } else if (p === color && !visited.has(`${nr},${nc}`)) {
+                            visited.add(`${nr},${nc}`);
+                            stack.push([nr, nc]);
+                        }
+                    }
+                });
+            }
+            return liberties;
+        }
+
+        function removeGroup(r, c, color) {
+            let stack = [[r, c]];
+            gameState.board[r][c] = PieceType.EMPTY;
+            while (stack.length) {
+                let [cr, cc] = stack.pop();
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    let nr = cr + dr, nc = cc + dc;
+                    if (nr >= 0 && nr < gameState.size && gameState.board[nr][nc] === color) {
+                        gameState.board[nr][nc] = PieceType.EMPTY;
+                        stack.push([nr, nc]);
+                    }
+                });
+            }
+        }
+
+        // --- 绘图 ---
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!gameState.board.length) return;
+
+            // 画线
+            ctx.beginPath();
+            ctx.strokeStyle = "#000";
+            for (let i = 0; i < gameState.size; i++) {
+                // 横线
+                ctx.moveTo(MARGIN, MARGIN + i * CELL_SIZE);
+                ctx.lineTo(MARGIN + (gameState.size - 1) * CELL_SIZE, MARGIN + i * CELL_SIZE);
+                // 竖线
+                ctx.moveTo(MARGIN + i * CELL_SIZE, MARGIN);
+                ctx.lineTo(MARGIN + i * CELL_SIZE, MARGIN + (gameState.size - 1) * CELL_SIZE);
+            }
+            ctx.stroke();
+
+            // 画子
+            for (let r = 0; r < gameState.size; r++) {
+                for (let c = 0; c < gameState.size; c++) {
+                    const p = gameState.board[r][c];
+                    if (p !== PieceType.EMPTY) {
+                        ctx.beginPath();
+                        const x = MARGIN + c * CELL_SIZE;
+                        const y = MARGIN + r * CELL_SIZE;
+                        ctx.arc(x, y, CELL_SIZE / 2 - 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = p === PieceType.BLACK ? "black" : "white";
+                        ctx.fill();
+                        ctx.strokeStyle = "black"; // 白棋描边
+                        if (p === PieceType.WHITE) ctx.stroke();
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
