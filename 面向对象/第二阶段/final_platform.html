@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>棋类对战平台 v7.0 (Web版)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 布局 */
+        .sidebar {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* 组件样式 */
+        h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        .panel {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        /* 按钮颜色 */
+        button {
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            border: none;
+            color: white;
+        }
+
+        .btn-primary {
+            background-color: #4CAF50;
+        }
+
+        .btn-primary:hover {
+            background-color: #45a049;
+        }
+
+        .btn-info {
+            background-color: #2196F3;
+        }
+
+        .btn-info:hover {
+            background-color: #1976D2;
+        }
+
+        .btn-warn {
+            background-color: #ff9800;
+        }
+
+        .btn-warn:hover {
+            background-color: #f57c00;
+        }
+
+        .btn-danger {
+            background-color: #f44336;
+        }
+
+        .btn-danger:hover {
+            background-color: #d32f2f;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        /* 游戏画布 */
+        canvas {
+            background-color: #E3CF57;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            cursor: crosshair;
+        }
+
+        /* 状态日志 */
+        #log-area {
+            width: 600px;
+            height: 120px;
+            margin-top: 15px;
+            background: #2d2d2d;
+            color: #0f0;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            padding: 10px;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+
+        /* 用户状态 */
+        .user-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 5px;
+            color: white;
+        }
+
+        .tag-p1 {
+            background-color: #333;
+        }
+
+        .tag-p2 {
+            background-color: #999;
+            color: black;
+        }
+
+        /* 模态框 (登录) */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 300px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">用户登录</h2>
+            <input type="text" id="username" placeholder="用户名">
+            <input type="password" id="password" placeholder="密码 (已隐藏)">
+            <button class="btn-primary" onclick="userSys.login()">登录</button>
+            <button class="btn-info" onclick="userSys.register()">注册</button>
+            <button class="btn-warn" onclick="userSys.guest()">游客试玩</button>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <h2>控制面板</h2>
+
+        <div class="panel">
+            <div id="p1-display">P1(黑): 未登录</div>
+            <div id="p2-display">P2(白): AI</div>
+            <button class="btn-info" style="margin-top:5px; font-size:0.8em;" onclick="userSys.showP2Login()">登录 P2 账号
+                (双人对战)</button>
+        </div>
+
+        <div class="panel">
+            <label>游戏模式</label>
+            <select id="gameType">
+                <option value="1">五子棋 (15路)</option>
+                <option value="2">围棋 (19路)</option>
+                <option value="3">黑白棋 (8路)</option>
+            </select>
+
+            <label>对手设置</label>
+            <select id="p2Type">
+                <option value="AI">AI (电脑)</option>
+                <option value="HUMAN">人类 (PVP)</option>
+            </select>
+
+            <label>AI 难度</label>
+            <select id="aiLevel">
+                <option value="1">简单 (随机)</option>
+                <option value="2" selected>困难 (贪心)</option>
+            </select>
+
+            <button class="btn-primary" onclick="game.start()">开始新游戏</button>
+        </div>
+
+        <div class="panel">
+            <label>游戏操作</label>
+            <div class="btn-group">
+                <button class="btn-warn" onclick="game.undo()">悔棋</button>
+                <button class="btn-warn" onclick="game.pass()">虚着</button>
+            </div>
+            <button class="btn-danger" onclick="game.resign()">认输 (Resign)</button>
+            <div class="btn-group">
+                <button class="btn-info" onclick="storage.save()">保存存档</button>
+                <button class="btn-info" onclick="storage.load()">读取存档</button>
+            </div>
+        </div>
+
+        <div id="replayPanel" class="panel hidden">
+            <label style="color:red;">回放模式</label>
+            <div class="btn-group">
+                <button class="btn-info" onclick="game.stepReplay(-1)">上一步</button>
+                <button class="btn-info" onclick="game.stepReplay(1)">下一步</button>
+            </div>
+            <button class="btn-danger" onclick="game.resume()">在此处接管 (Resume)</button>
+            <button class="btn-warn" onclick="game.exitReplay()">退出回放</button>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <canvas id="board" width="600" height="600"></canvas>
+        <div id="log-area">>> 系统启动完成...<br>>> 请登录以记录战绩。</div>
+    </div>
+
+    <script>
+        /**
+         * 移植自 Python Final Platform v7.0
+         * 包含：用户管理、规则引擎、AI策略、状态管理
+         */
+
+        // --- 基础枚举 ---
+        const Type = { EMPTY: 0, BLACK: 1, WHITE: 2 };
+        const GameMode = { GOMOKU: 1, GO: 2, REVERSI: 3 };
+
+        // --- 用户系统 (LocalStorage) ---
+        const userSys = {
+            currentUser: null, // P1
+            secondUser: null,  // P2
+
+            getDB() { return JSON.parse(localStorage.getItem('chess_users') || '{}'); },
+            saveDB(db) { localStorage.setItem('chess_users', JSON.stringify(db)); },
+
+            login(isP2 = false) {
+                const u = isP2 ? prompt("P2 用户名:") : document.getElementById('username').value;
+                const p = isP2 ? prompt("P2 密码:") : document.getElementById('password').value;
+                if (!u || !p) return alert("输入不能为空");
+
+                const db = this.getDB();
+                if (db[u] && db[u].pwd === p) {
+                    if (isP2) {
+                        if (u === this.currentUser?.name) return alert("不能与自己对战");
+                        this.secondUser = db[u];
+                        log(`[系统] P2 登录成功: ${u}`);
+                        this.updateDisplay();
+                    } else {
+                        this.currentUser = db[u];
+                        document.getElementById('loginModal').classList.add('hidden');
+                        log(`[系统] 欢迎回来, ${u}。胜率: ${this.getRate(u)}`);
+                        this.updateDisplay();
+                    }
+                } else {
+                    alert("用户名或密码错误");
+                }
+            },
+
+            register() {
+                const u = document.getElementById('username').value;
+                const p = document.getElementById('password').value;
+                if (!u || !p) return alert("输入不能为空");
+
+                const db = this.getDB();
+                if (db[u]) return alert("用户已存在");
+
+                db[u] = { name: u, pwd: p, wins: 0, total: 0 };
+                this.saveDB(db);
+                alert("注册成功，请登录");
+            },
+
+            guest() {
+                this.currentUser = null;
+                document.getElementById('loginModal').classList.add('hidden');
+                log("[系统] 游客模式登录");
+                this.updateDisplay();
+            },
+
+            showP2Login() {
+                this.login(true);
+            },
+
+            recordWin(winnerColor) {
+                const db = this.getDB();
+                let updated = false;
+
+                // P1 结算
+                if (this.currentUser && db[this.currentUser.name]) {
+                    db[this.currentUser.name].total++;
+                    if (winnerColor === Type.BLACK) db[this.currentUser.name].wins++;
+                    this.currentUser = db[this.currentUser.name]; // 更新内存
+                    updated = true;
+                }
+
+                // P2 结算 (如果是双人登录)
+                if (this.secondUser && db[this.secondUser.name]) {
+                    db[this.secondUser.name].total++;
+                    if (winnerColor === Type.WHITE) db[this.secondUser.name].wins++;
+                    this.secondUser = db[this.secondUser.name];
+                    updated = true;
+                }
+
+                if (updated) {
+                    this.saveDB(db);
+                    this.updateDisplay();
+                    log("[数据] 战绩已更新到本地数据库");
+                }
+            },
+
+            getRate(name) {
+                const u = this.getDB()[name];
+                if (!u || u.total === 0) return "0%";
+                return ((u.wins / u.total) * 100).toFixed(1) + "%";
+            },
+
+            updateDisplay() {
+                const p1Info = this.currentUser ? `${this.currentUser.name} [胜:${this.currentUser.wins}/总:${this.currentUser.total}]` : "游客";
+                const p2Info = this.secondUser ? `${this.secondUser.name} [胜:${this.secondUser.wins}/总:${this.secondUser.total}]` : (game.p2IsAI ? "AI (电脑)" : "人类 (未登录)");
+
+                document.getElementById('p1-display').innerHTML = `<span class='user-tag tag-p1'>黑</span> ${p1Info}`;
+                document.getElementById('p2-display').innerHTML = `<span class='user-tag tag-p2'>白</span> ${p2Info}`;
+            }
+        };
+
+        // --- 规则引擎 ---
+        const rules = {
+            // 基础检查
+            inBounds: (b, r, c) => r >= 0 && r < b.length && c >= 0 && c < b.length,
+
+            // 黑白棋翻转逻辑
+            reversi: {
+                getFlips(board, r, c, color) {
+                    const opp = color === Type.BLACK ? Type.WHITE : Type.BLACK;
+                    const dirs = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+                    let flips = [];
+
+                    for (let [dr, dc] of dirs) {
+                        let temp = [], nr = r + dr, nc = c + dc;
+                        while (rules.inBounds(board, nr, nc) && board[nr][nc] === opp) {
+                            temp.push([nr, nc]); nr += dr; nc += dc;
+                        }
+                        if (rules.inBounds(board, nr, nc) && board[nr][nc] === color) {
+                            flips.push(...temp);
+                        }
+                    }
+                    return flips;
+                }
+            },
+
+            // 围棋气和提子
+            go: {
+                getGroup(board, r, c, color) {
+                    let stack = [[r, c]], visited = new Set([`${r},${c}`]), liberties = 0;
+                    let group = [[r, c]];
+                    while (stack.length) {
+                        let [cx, cy] = stack.pop();
+                        [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dx, dy]) => {
+                            let nx = cx + dx, ny = cy + dy;
+                            if (!rules.inBounds(board, nx, ny)) return;
+                            if (board[nx][ny] === Type.EMPTY) {
+                                if (!visited.has(`E${nx},${ny}`)) { liberties++; visited.add(`E${nx},${ny}`); }
+                            } else if (board[nx][ny] === color && !visited.has(`${nx},${ny}`)) {
+                                visited.add(`${nx},${ny}`); group.push([nx, ny]); stack.push([nx, ny]);
+                            }
+                        });
+                    }
+                    return { group, liberties };
+                }
+            },
+
+            // 五子棋判赢
+            gomoku: {
+                checkWin(board, r, c, color) {
+                    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+                    for (let [dr, dc] of dirs) {
+                        let count = 1;
+                        for (let i = 1; i < 5; i++) if (rules.inBounds(board, r + dr * i, c + dc * i) && board[r + dr * i][c + dc * i] === color) count++; else break;
+                        for (let i = 1; i < 5; i++) if (rules.inBounds(board, r - dr * i, c - dc * i) && board[r - dr * i][c - dc * i] === color) count++; else break;
+                        if (count >= 5) return true;
+                    }
+                    return false;
+                }
+            }
+        };
+
+        // --- AI 策略 (移植版) ---
+        const ai = {
+            getMove(board, mode, color, level) {
+                let legalMoves = [];
+                let size = board.length;
+
+                // 1. 找所有合法点
+                for (let r = 0; r < size; r++) {
+                    for (let c = 0; c < size; c++) {
+                        if (board[r][c] !== Type.EMPTY) continue;
+                        // 规则校验
+                        if (mode === GameMode.REVERSI) {
+                            if (rules.reversi.getFlips(board, r, c, color).length > 0) legalMoves.push([r, c]);
+                        } else if (mode === GameMode.GOMOKU) {
+                            legalMoves.push([r, c]);
+                        } else { // GO
+                            // 简化：不填眼即可
+                            legalMoves.push([r, c]);
+                        }
+                    }
+                }
+
+                if (legalMoves.length === 0) return null;
+
+                // Level 1: 随机
+                if (level == 1) return legalMoves[Math.floor(Math.random() * legalMoves.length)];
+
+                // Level 2: 贪心
+                if (mode === GameMode.REVERSI) {
+                    let best = -999, moves = [];
+                    for (let [r, c] of legalMoves) {
+                        let score = rules.reversi.getFlips(board, r, c, color).length;
+                        if ((r === 0 || r === 7) && (c === 0 || c === 7)) score += 100; // 占角
+                        if (score > best) { best = score; moves = [[r, c]]; }
+                        else if (score === best) moves.push([r, c]);
+                    }
+                    return moves[Math.floor(Math.random() * moves.length)];
+                }
+                else if (mode === GameMode.GOMOKU) {
+                    // 简单估值：越靠近中心分越高 + 连珠分
+                    let best = -1, moves = [];
+                    let mid = size / 2;
+                    for (let [r, c] of legalMoves) {
+                        let score = (size - Math.abs(r - mid) - Math.abs(c - mid));
+                        // 攻防估值省略，保留基本位置分
+                        if (score > best) { best = score; moves = [[r, c]]; }
+                        else if (score === best) moves.push([r, c]);
+                    }
+                    return moves[Math.floor(Math.random() * moves.length)];
+                }
+
+                return legalMoves[Math.floor(Math.random() * legalMoves.length)];
+            }
+        };
+
+        // --- 游戏核心控制器 ---
+        const game = {
+            board: [],
+            size: 15,
+            mode: 1,
+            turn: Type.BLACK,
+            history: [],
+            isOver: true,
+            passCount: 0,
+            p2IsAI: true,
+            aiLevel: 2,
+
+            // 回放状态
+            isReplay: false,
+            replayIdx: 0,
+            replayData: [],
+
+            initCanvas() {
+                this.canvas = document.getElementById('board');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.addEventListener('mousedown', (e) => this.onClick(e));
+            },
+
+            start() {
+                this.mode = parseInt(document.getElementById('gameType').value);
+                this.p2IsAI = document.getElementById('p2Type').value === 'AI';
+                this.aiLevel = parseInt(document.getElementById('aiLevel').value);
+
+                // 棋盘大小设定
+                if (this.mode === GameMode.GOMOKU) this.size = 15;
+                if (this.mode === GameMode.GO) this.size = 19;
+                if (this.mode === GameMode.REVERSI) this.size = 8;
+
+                // 初始化
+                this.board = Array(this.size).fill(0).map(() => Array(this.size).fill(0));
+                this.turn = Type.BLACK;
+                this.isOver = false;
+                this.history = [];
+                this.passCount = 0;
+                this.isReplay = false;
+                document.getElementById('replayPanel').classList.add('hidden');
+
+                // 黑白棋初始子
+                if (this.mode === GameMode.REVERSI) {
+                    let m = this.size / 2;
+                    this.board[m - 1][m - 1] = Type.WHITE;
+                    this.board[m][m] = Type.WHITE;
+                    this.board[m - 1][m] = Type.BLACK;
+                    this.board[m][m - 1] = Type.BLACK;
+                }
+
+                this.saveState(); // 初始状态
+                userSys.updateDisplay(); // 更新显示（P2可能从AI变人）
+                log(`[系统] 游戏开始！模式: ${this.getModeName()}`);
+                this.draw();
+
+                // 黑白棋先手检查
+                if (this.mode === GameMode.REVERSI) this.checkAutoPass();
+            },
+
+            getModeName() {
+                return ["", "五子棋", "围棋", "黑白棋"][this.mode];
+            },
+
+            onClick(e) {
+                if (this.isOver || this.isReplay) return;
+                if (this.turn === Type.WHITE && this.p2IsAI) return; // AI思考中
+
+                const rect = this.canvas.getBoundingClientRect();
+                const cellSize = this.canvas.width / (this.size + (this.mode === 3 ? 0 : 1)); // 边距修正
+                const margin = cellSize / 2 + (this.mode === 3 ? 0 : 10); // 简单对齐
+
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // 坐标转换
+                let c = Math.round((x - 30) / 35);
+                let r = Math.round((y - 30) / 35);
+
+                // 动态计算
+                // 简单处理：Web版固定绘制逻辑
+                // 实际绘制用了固定间隔35
+                c = Math.round((x - 30) / 35);
+                r = Math.round((y - 30) / 35);
+
+                if (r >= 0 && r < this.size && c >= 0 && c < this.size) {
+                    this.attemptMove(r, c);
+                }
+            },
+
+            attemptMove(r, c) {
+                // 1. 基础校验
+                if (this.board[r][c] !== Type.EMPTY) return log("❌ 此处已有棋子");
+
+                // 2. 规则校验与执行
+                let captured = [];
+                if (this.mode === GameMode.REVERSI) {
+                    let flips = rules.reversi.getFlips(this.board, r, c, this.turn);
+                    if (flips.length === 0) return log("❌ 必须夹住对方棋子");
+                    // 执行翻转
+                    flips.forEach(([fr, fc]) => this.board[fr][fc] = this.turn);
+                }
+                else if (this.mode === GameMode.GO) {
+                    // 提子逻辑模拟
+                    let opp = this.turn === Type.BLACK ? Type.WHITE : Type.BLACK;
+                    [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                        let nr = r + dr, nc = c + dc;
+                        if (rules.inBounds(this.board, nr, nc) && this.board[nr][nc] === opp) {
+                            let res = rules.go.getGroup(this.board, nr, nc, opp);
+                            if (res.liberties === 0) { // 提子
+                                res.group.forEach(([gr, gc]) => this.board[gr][gc] = Type.EMPTY);
+                                captured.push(...res.group);
+                            }
+                        }
+                    });
+                    // 自杀检查
+                    this.board[r][c] = this.turn; // 假下
+                    let selfRes = rules.go.getGroup(this.board, r, c, this.turn);
+                    if (selfRes.liberties === 0 && captured.length === 0) {
+                        this.board[r][c] = Type.EMPTY; // 还原
+                        return log("❌ 禁着点：自杀");
+                    }
+                }
+
+                // 落子
+                this.board[r][c] = this.turn;
+                this.passCount = 0;
+                this.saveState({ r, c }); // 记录
+
+                // 判胜 (五子棋)
+                if (this.mode === GameMode.GOMOKU && rules.gomoku.checkWin(this.board, r, c, this.turn)) {
+                    return this.gameOver(this.turn, (this.turn === 1 ? "黑方" : "白方") + "五连珠获胜");
+                }
+
+                // 棋盘满
+                if (!this.board.some(row => row.includes(Type.EMPTY))) {
+                    if (this.mode !== GameMode.GO) return this.countScore("棋盘已满");
+                }
+
+                // 换手
+                this.turn = this.turn === Type.BLACK ? Type.WHITE : Type.BLACK;
+                this.draw();
+
+                // 触发AI或合法性检查
+                setTimeout(() => this.nextStepLogic(), 100);
+            },
+
+            nextStepLogic() {
+                if (this.isOver) return;
+
+                // 检查无子可落 (黑白棋)
+                if (this.mode === GameMode.REVERSI || this.mode === GameMode.GO) {
+                    this.checkAutoPass();
+                    if (this.isOver) return; // 如果双pass结束
+                }
+
+                // AI行动
+                if (this.turn === Type.WHITE && this.p2IsAI) {
+                    let move = ai.getMove(this.board, this.mode, this.turn, this.aiLevel);
+                    if (move) this.attemptMove(move[0], move[1]);
+                    else this.pass(); // AI无子可下
+                }
+            },
+
+            checkAutoPass() {
+                // 简单检查是否有合法步
+                let canMove = false;
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        if (this.board[r][c] !== Type.EMPTY) continue;
+                        if (this.mode === GameMode.REVERSI) {
+                            if (rules.reversi.getFlips(this.board, r, c, this.turn).length > 0) { canMove = true; break; }
+                        } else {
+                            canMove = true; break; // 围棋总能下
+                        }
+                    }
+                    if (canMove) break;
+                }
+
+                if (!canMove) {
+                    log(`[系统] ${this.turn === 1 ? "黑" : "白"}方无子可落，自动虚着`);
+                    this.pass();
+                }
+            },
+
+            pass() {
+                if (this.isOver) return;
+                if (this.mode === GameMode.GOMOKU) return log("❌ 五子棋不允许虚着");
+
+                this.passCount++;
+                log(`[操作] ${this.turn === 1 ? "黑" : "白"}方 虚着(Pass)`);
+                this.saveState(null);
+                this.turn = this.turn === Type.BLACK ? Type.WHITE : Type.BLACK;
+
+                if (this.passCount >= 2) {
+                    this.countScore("双方连续虚着，游戏结束");
+                } else {
+                    this.draw();
+                    setTimeout(() => this.nextStepLogic(), 100);
+                }
+            },
+
+            undo() {
+                if (this.isReplay) return alert("回放模式无法悔棋");
+                if (this.history.length < 2) return alert("无法悔棋");
+
+                let steps = this.p2IsAI ? 2 : 1;
+                if (this.history.length <= steps) steps = this.history.length - 1;
+
+                for (let i = 0; i < steps; i++) this.history.pop();
+
+                let last = this.history[this.history.length - 1];
+                this.board = JSON.parse(JSON.stringify(last.board));
+                this.turn = last.turn;
+                this.isOver = false;
+                this.passCount = 0;
+
+                log("[操作] 悔棋成功");
+                this.draw();
+            },
+
+            resign() {
+                if (this.isOver) return;
+                let winner = this.turn === Type.BLACK ? Type.WHITE : Type.BLACK;
+                this.gameOver(winner, `${this.turn === 1 ? "黑" : "白"}方认输`);
+            },
+
+            countScore(reason) {
+                let b = 0, w = 0;
+                this.board.forEach(r => r.forEach(p => { if (p === 1) b++; if (p === 2) w++; }));
+                let winner = b > w ? Type.BLACK : (w > b ? Type.WHITE : Type.EMPTY);
+                this.gameOver(winner, `${reason}。黑:${b} 白:${w}`);
+            },
+
+            gameOver(winner, msg) {
+                this.isOver = true;
+                log(`🏆 游戏结束: ${msg}`);
+                alert(msg);
+                if (winner !== Type.EMPTY) userSys.recordWin(winner);
+            },
+
+            saveState(move) {
+                this.history.push({
+                    board: JSON.parse(JSON.stringify(this.board)),
+                    turn: this.turn,
+                    move: move
+                });
+            },
+
+            // --- 绘制 ---
+            draw() {
+                const ctx = this.ctx;
+                const width = this.canvas.width;
+                // 固定参数适配 600px
+                const margin = 30;
+                const cell = 35;
+
+                // 动态适配画布大小
+                const realDim = this.size * 35 + 60;
+                this.canvas.width = realDim;
+                this.canvas.height = realDim;
+
+                ctx.fillStyle = "#E3CF57";
+                ctx.fillRect(0, 0, realDim, realDim);
+
+                // 网格
+                ctx.beginPath();
+                ctx.strokeStyle = "black";
+                let offset = this.mode === GameMode.REVERSI ? 17.5 : 0; // 黑白棋格内落子
+                let gridNum = this.mode === GameMode.REVERSI ? this.size + 1 : this.size;
+
+                for (let i = 0; i < gridNum; i++) {
+                    ctx.moveTo(margin, margin + i * cell);
+                    ctx.lineTo(margin + (gridNum - 1) * cell, margin + i * cell);
+                    ctx.moveTo(margin + i * cell, margin);
+                    ctx.lineTo(margin + i * cell, margin + (gridNum - 1) * cell);
+                }
+                ctx.stroke();
+
+                // 棋子
+                for (let r = 0; r < this.size; r++) {
+                    for (let c = 0; c < this.size; c++) {
+                        if (this.board[r][c] !== Type.EMPTY) {
+                            let x = margin + c * cell + offset;
+                            let y = margin + r * cell + offset;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, 15, 0, 2 * Math.PI);
+                            ctx.fillStyle = this.board[r][c] === Type.BLACK ? "black" : "white";
+                            ctx.fill();
+                            if (this.board[r][c] === Type.WHITE) ctx.stroke();
+
+                            // 标记最后一步
+                            let last = this.isReplay
+                                ? this.replayData[this.replayIdx]?.move
+                                : this.history[this.history.length - 1]?.move;
+
+                            if (last && last.r === r && last.c === c) {
+                                ctx.fillStyle = "red";
+                                ctx.beginPath();
+                                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                                ctx.fill();
+                            }
+                        }
+                    }
+                }
+            },
+
+            // --- 存档回放 ---
+            loadReplay(data) {
+                this.isReplay = true;
+                this.replayData = data.history;
+                this.mode = data.mode;
+                this.size = data.size;
+                this.replayIdx = 0;
+
+                document.getElementById('replayPanel').classList.remove('hidden');
+                this.updateReplayView();
+                log("[系统] 进入回放模式");
+            },
+
+            stepReplay(dir) {
+                if (!this.isReplay) return;
+                let next = this.replayIdx + dir;
+                if (next >= 0 && next < this.replayData.length) {
+                    this.replayIdx = next;
+                    this.updateReplayView();
+                }
+            },
+
+            updateReplayView() {
+                let state = this.replayData[this.replayIdx];
+                this.board = state.board;
+                this.draw();
+                log(`[回放] 步骤 ${this.replayIdx} / ${this.replayData.length - 1}`);
+            },
+
+            resume() {
+                if (!this.isReplay) return;
+                this.isReplay = false;
+                this.isOver = false;
+                document.getElementById('replayPanel').classList.add('hidden');
+
+                // 恢复历史栈
+                this.history = this.replayData.slice(0, this.replayIdx + 1);
+                let current = this.history[this.history.length - 1];
+                this.turn = current.turn;
+                this.board = JSON.parse(JSON.stringify(current.board)); // 深拷贝防止引用问题
+
+                log("[系统] 已接管比赛，请继续下棋");
+                this.draw();
+                // 恢复后如果是AI回合
+                if (this.turn === Type.WHITE && this.p2IsAI) setTimeout(() => this.nextStepLogic(), 500);
+            },
+
+            exitReplay() {
+                this.isReplay = false;
+                document.getElementById('replayPanel').classList.add('hidden');
+                this.start(); // 重置回新游戏界面
+            }
+        };
+
+        // --- 存储管理 ---
+        const storage = {
+            save() {
+                if (game.history.length === 0) return alert("空局无法保存");
+                const name = prompt("存档命名:", "game_" + new Date().getTime());
+                if (!name) return;
+
+                const data = {
+                    history: game.history,
+                    mode: game.mode,
+                    size: game.size,
+                    p1: userSys.currentUser?.name,
+                    p2: userSys.secondUser?.name || "AI"
+                };
+                localStorage.setItem('save_' + name, JSON.stringify(data));
+                log(`[系统] 存档 ${name} 保存成功`);
+            },
+
+            load() {
+                // 简单的遍历所有存档
+                let saves = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    let k = localStorage.key(i);
+                    if (k.startsWith('save_')) saves.push(k.replace('save_', ''));
+                }
+                if (saves.length === 0) return alert("没有存档");
+
+                let name = prompt("输入存档名:\n" + saves.join("\n"));
+                if (!name) return;
+
+                let json = localStorage.getItem('save_' + name);
+                if (!json) return alert("存档不存在");
+
+                let data = JSON.parse(json);
+                // 权限检查
+                const curr = userSys.currentUser?.name;
+                if (data.p1 && curr && data.p1 !== curr && data.p2 !== curr) {
+                    if (!confirm(`⚠️ 警告: 此存档属于 ${data.p1} 和 ${data.p2}，你确定要读取吗?`)) return;
+                }
+
+                game.loadReplay(data);
+            }
+        };
+
+        function log(msg) {
+            const el = document.getElementById('log-area');
+            el.innerHTML += `<div>${msg}</div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // 初始化
+        game.initCanvas();
+    </script>
+</body>
+
+</html>
